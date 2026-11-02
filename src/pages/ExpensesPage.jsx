@@ -1,277 +1,237 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchExpenses, fetchCategories, deleteExpense } from '../services/api';
+import { fetchExpenses, deleteExpense, DEFAULT_CATEGORIES } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState('all');
+  const [paymentMethod, setPaymentMethod] = useState('all');
+  const [sort, setSort] = useState('date-desc');
   const [notification, setNotification] = useState('');
 
-  // Filters State
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [sortBy, setSortBy] = useState('date-desc');
+  const { currentUser } = useAuth();
 
-  const loadData = async () => {
+  const loadExpenses = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const [expData, catData] = await Promise.all([
-        fetchExpenses({
-          search,
-          categoryId: selectedCategory,
-          startDate,
-          endDate,
-        }),
-        fetchCategories(),
-      ]);
-      setExpenses(expData || []);
-      setCategories(catData || []);
+      const data = await fetchExpenses({ search, categoryId, paymentMethod, sort });
+      setExpenses(data);
     } catch (err) {
-      setError('Failed to fetch expenses: ' + err.message);
+      console.error('Failed to load expenses:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [search, selectedCategory, startDate, endDate]);
-
-  const handleResetFilters = () => {
-    setSearch('');
-    setSelectedCategory('');
-    setStartDate('');
-    setEndDate('');
-    setSortBy('date-desc');
-  };
+    loadExpenses();
+  }, [search, categoryId, paymentMethod, sort]);
 
   const handleDelete = async (id, title) => {
     if (window.confirm(`Are you sure you want to delete the expense "${title}"?`)) {
       try {
         await deleteExpense(id);
-        setNotification(`Expense "${title}" was successfully deleted.`);
+        setNotification(`Expense "${title}" was deleted.`);
         setTimeout(() => setNotification(''), 4000);
-        loadData();
+        loadExpenses();
       } catch (err) {
         alert('Failed to delete expense: ' + err.message);
       }
     }
   };
 
-  // Client-side sorting
-  const sortedExpenses = [...expenses].sort((a, b) => {
-    if (sortBy === 'date-desc') return new Date(b.expenseDate) - new Date(a.expenseDate);
-    if (sortBy === 'date-asc') return new Date(a.expenseDate) - new Date(b.expenseDate);
-    if (sortBy === 'amount-desc') return b.amount - a.amount;
-    if (sortBy === 'amount-asc') return a.amount - b.amount;
-    return 0;
-  });
-
-  const totalFilteredAmount = sortedExpenses.reduce((sum, item) => sum + item.amount, 0);
-
-  // Export CSV
   const handleExportCSV = () => {
-    if (sortedExpenses.length === 0) {
-      alert('No expense data to export.');
+    if (expenses.length === 0) {
+      alert('No expense records to export.');
       return;
     }
 
-    const headers = ['ID,Title,Amount (INR),Category,Date,Payment Method,Notes'];
-    const rows = sortedExpenses.map(e =>
-      `"${e.id}","${e.title.replace(/"/g, '""')}","${e.amount}","${e.category?.name || 'N/A'}","${e.expenseDate}","${e.paymentMethod || 'N/A'}","${(e.notes || '').replace(/"/g, '""')}"`
-    );
+    let csv = "ID,Date,Title,Category,Payment Method,Amount,Notes\n";
+    expenses.forEach(exp => {
+      const cat = DEFAULT_CATEGORIES.find(c => c.id === Number(exp.categoryId)) || { name: 'Other' };
+      csv += `"${exp.id}","${exp.expenseDate}","${(exp.title || '').replace(/"/g, '""')}","${cat.name}","${exp.paymentMethod || 'UPI'}","${exp.amount}","${(exp.notes || '').replace(/"/g, '""')}"\n`;
+    });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Expense_Report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SpendWise_Expenses_${currentUser?.username || 'user'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
+
+  const clearFilters = () => {
+    setSearch('');
+    setCategoryId('all');
+    setPaymentMethod('all');
+    setSort('date-desc');
+  };
+
+  const totalFilteredSum = expenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
   return (
     <div>
-      <div className="page-header">
+      <div className="dashboard-header">
         <div>
-          <h1>Expense Records</h1>
-          <p>Search, filter, analyze, and manage all your expenditure items</p>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)' }}>All Expenses Ledger</h1>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            Filter, search, audit, and export your personal transactions
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem' }}>
-          <button className="btn btn-secondary btn-sm" onClick={handleExportCSV}>
-            📥 Export CSV
+
+        <div className="dash-action-buttons">
+          <button className="btn btn-secondary" onClick={handleExportCSV}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span>Export to CSV</span>
           </button>
-          <Link to="/add" className="btn btn-primary btn-sm">
-            ➕ Add Expense
+          <Link to="/add" className="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add New Expense</span>
           </Link>
         </div>
       </div>
 
       {notification && (
-        <div className="alert-banner alert-success">
-          <span>{notification}</span>
+        <div className="alert-banner alert-success" style={{ marginBottom: '1.5rem' }}>
+          ✓ {notification}
         </div>
       )}
 
-      {error && (
-        <div className="alert-banner alert-danger">
-          <span>{error}</span>
-        </div>
-      )}
+      <div className="transactions-card">
+        
+        {/* Filters Toolbar */}
+        <div className="filters-bar">
+          <div className="filter-input-wrap">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="🔍 Search title or remarks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-      {/* Filter and Search Bar */}
-      <div className="filter-bar">
-        <div className="search-box">
-          <input
-            type="text"
-            className="form-control"
-            placeholder="🔍 Search description, notes, method..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <select
-            className="form-control"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
+          <select className="filter-select" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="all">All Categories</option>
+            {DEFAULT_CATEGORIES.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>From:</span>
-          <input
-            type="date"
-            className="form-control"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-        </div>
+          <select className="filter-select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            <option value="all">All Payment Methods</option>
+            <option value="UPI">UPI</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Debit Card">Debit Card</option>
+            <option value="Net Banking">Net Banking</option>
+            <option value="Cash">Cash</option>
+          </select>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>To:</span>
-          <input
-            type="date"
-            className="form-control"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <select
-            className="form-control"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
+          <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="date-desc">Date: Newest First</option>
             <option value="date-asc">Date: Oldest First</option>
             <option value="amount-desc">Amount: Highest First</option>
             <option value="amount-asc">Amount: Lowest First</option>
           </select>
-        </div>
 
-        {(search || selectedCategory || startDate || endDate) && (
-          <button className="btn btn-secondary btn-sm" onClick={handleResetFilters}>
-            ✕ Clear
-          </button>
-        )}
-      </div>
-
-      {/* Filter Stats Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0 0.2rem' }}>
-        <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-          Showing <strong>{sortedExpenses.length}</strong> transactions
-        </span>
-        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-          Total Sum: ₹{totalFilteredAmount.toLocaleString()}
-        </span>
-      </div>
-
-      {/* Table of Expenses */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-          <h3>Loading records...</h3>
-        </div>
-      ) : sortedExpenses.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <h3>No matching expenses found</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            Try clearing your filters or create a new expense entry.
-          </p>
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: '1rem' }} onClick={handleResetFilters}>
+          <button className="btn btn-secondary btn-sm" onClick={clearFilters}>
             Reset Filters
           </button>
         </div>
-      ) : (
+
+        {/* Ledger Summary */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', fontSize: '0.88rem' }}>
+          <span style={{ color: 'var(--text-muted)' }}>
+            Showing <strong style={{ color: 'var(--text-main)' }}>{expenses.length}</strong> transactions
+          </span>
+          <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+            Filtered Total: <strong style={{ color: 'var(--primary)', fontFamily: 'JetBrains Mono, monospace' }}>₹{totalFilteredSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+          </span>
+        </div>
+
+        {/* Table */}
         <div className="table-container">
-          <table className="data-table">
+          <table className="custom-table">
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Title / Description</th>
                 <th>Category</th>
-                <th>Payment Method</th>
-                <th>Amount</th>
-                <th>Notes</th>
+                <th>Method</th>
+                <th>Amount (₹)</th>
+                <th>Remarks</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedExpenses.map((exp) => (
-                <tr key={exp.id}>
-                  <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{exp.expenseDate}</td>
-                  <td><strong>{exp.title}</strong></td>
-                  <td>
-                    <span
-                      className="badge"
-                      style={{
-                        backgroundColor: `${exp.category?.color || '#3B82F6'}20`,
-                        color: exp.category?.color || '#3B82F6',
-                      }}
-                    >
-                      {exp.category?.name || 'General'}
-                    </span>
+              {loading ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                    Loading transactions...
                   </td>
-                  <td>
-                    <span className="badge badge-payment">{exp.paymentMethod || 'UPI'}</span>
-                  </td>
-                  <td className="amount-cell">₹{exp.amount.toLocaleString()}</td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)', maxWidth: '220px' }}>
-                    {exp.notes || '—'}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
-                      <Link to={`/edit/${exp.id}`} className="btn btn-secondary btn-sm" title="Edit Expense">
-                        ✏️ Edit
-                      </Link>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(exp.id, exp.title)}
-                        title="Delete Expense"
-                      >
-                        🗑️ Delete
-                      </button>
+                </tr>
+              ) : expenses.length === 0 ? (
+                <tr>
+                  <td colSpan="7">
+                    <div className="empty-state-wrap">
+                      <div className="empty-state-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                      </div>
+                      <h3 className="empty-state-title">No transactions found</h3>
+                      <p className="empty-state-desc">Try adjusting your filters or record a new expense.</p>
+                      <Link to="/add" className="btn btn-primary">+ Add New Expense</Link>
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                expenses.map(exp => {
+                  const cat = DEFAULT_CATEGORIES.find(c => c.id === Number(exp.categoryId)) || { name: 'Other', color: '#64748b', bg: '#f1f5f9' };
+                  return (
+                    <tr key={exp.id}>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                        {exp.expenseDate}
+                      </td>
+                      <td>
+                        <span className="cell-title">{exp.title}</span>
+                      </td>
+                      <td>
+                        <span className="category-tag" style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.color}33` }}>
+                          ● {cat.name}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="method-tag">{exp.paymentMethod || 'UPI'}</span>
+                      </td>
+                      <td>
+                        <span className="cell-amount">₹{Number(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', maxWidth: '200px' }}>
+                        {exp.notes || '-'}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="table-actions">
+                          <Link to={`/edit/${exp.id}`} className="btn-action-icon" title="Edit Expense">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </Link>
+                          <button className="btn-action-icon delete" onClick={() => handleDelete(exp.id, exp.title)} title="Delete Expense">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      )}
+
+      </div>
     </div>
   );
 }

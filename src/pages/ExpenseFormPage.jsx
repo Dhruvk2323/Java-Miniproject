@@ -1,102 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { fetchCategories, fetchExpenseById, createExpense, updateExpense } from '../services/api';
+import { createExpense, updateExpense, fetchExpenseById, DEFAULT_CATEGORIES } from '../services/api';
 
 export default function ExpenseFormPage() {
-  const navigate = useNavigate();
   const { id } = useParams();
+  const navigate = useNavigate();
   const isEditMode = Boolean(id);
 
-  const [categories, setCategories] = useState([]);
-  const [formData, setFormData] = useState({
-    title: '',
-    amount: '',
-    categoryId: '',
-    expenseDate: new Date().toISOString().slice(0, 10),
-    paymentMethod: 'UPI',
-    notes: '',
-  });
+  const [title, setTitle] = useState('');
+  const [amount, setAmount] = useState('');
+  const [categoryId, setCategoryId] = useState('1');
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingExpense, setLoadingExpense] = useState(isEditMode);
-
-  // Load categories and existing expense if in edit mode
   useEffect(() => {
-    async function init() {
-      try {
-        const catList = await fetchCategories();
-        setCategories(catList || []);
-        if (catList && catList.length > 0 && !isEditMode) {
-          setFormData((prev) => ({ ...prev, categoryId: catList[0].id }));
-        }
-
-        if (isEditMode) {
-          const exp = await fetchExpenseById(id);
-          setFormData({
-            title: exp.title || '',
-            amount: exp.amount || '',
-            categoryId: exp.category ? exp.category.id : '',
-            expenseDate: exp.expenseDate || new Date().toISOString().slice(0, 10),
-            paymentMethod: exp.paymentMethod || 'UPI',
-            notes: exp.notes || '',
-          });
-        }
-      } catch (err) {
-        alert('Error loading data: ' + err.message);
-      } finally {
-        setLoadingExpense(false);
-      }
+    if (isEditMode) {
+      setLoading(true);
+      fetchExpenseById(id)
+        .then(data => {
+          setTitle(data.title || '');
+          setAmount(data.amount || '');
+          setCategoryId(String(data.categoryId || '1'));
+          setExpenseDate(data.expenseDate || new Date().toISOString().slice(0, 10));
+          setPaymentMethod(data.paymentMethod || 'UPI');
+          setNotes(data.notes || '');
+        })
+        .catch(err => {
+          setError('Failed to load expense details: ' + err.message);
+        })
+        .finally(() => setLoading(false));
     }
-    init();
   }, [id, isEditMode]);
-
-  // Client-side validation (Aligned with Lab Exp 9)
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.title || formData.title.trim().length < 3) {
-      newErrors.title = 'Title is required and must be at least 3 characters.';
-    }
-
-    if (!formData.amount || isNaN(formData.amount) || Number(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be a positive number greater than 0.';
-    }
-
-    if (!formData.categoryId) {
-      newErrors.categoryId = 'Please select a valid expense category.';
-    }
-
-    if (!formData.expenseDate) {
-      newErrors.expenseDate = 'Expense date is required.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear field-specific error as user types
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const parsedAmount = parseFloat(amount);
+
+    if (!title.trim()) {
+      setError('Please provide an expense title.');
+      return;
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError('Amount must be a positive number greater than zero.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
 
     try {
-      setSubmitting(true);
       const payload = {
-        title: formData.title.trim(),
-        amount: Number(formData.amount),
-        categoryId: Number(formData.categoryId),
-        expenseDate: formData.expenseDate,
-        paymentMethod: formData.paymentMethod,
-        notes: formData.notes.trim(),
+        title: title.trim(),
+        amount: parsedAmount,
+        categoryId: parseInt(categoryId),
+        expenseDate,
+        paymentMethod,
+        notes: notes.trim()
       };
 
       if (isEditMode) {
@@ -107,158 +69,123 @@ export default function ExpenseFormPage() {
 
       navigate('/expenses');
     } catch (err) {
-      if (err.fieldErrors) {
-        setErrors(err.fieldErrors);
-      } else {
-        alert(`Failed to ${isEditMode ? 'update' : 'create'} expense: ` + err.message);
-      }
+      setError(err.message || 'Operation failed.');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  if (loadingExpense) {
-    return (
-      <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-        <h3>Loading expense details...</h3>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="page-header" style={{ maxWidth: '650px', margin: '0 auto 1.5rem auto' }}>
+    <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+      <div className="dashboard-header" style={{ marginBottom: '1.25rem' }}>
         <div>
-          <h1>{isEditMode ? 'Edit Expense' : 'Add New Expense'}</h1>
-          <p>{isEditMode ? `Update details for transaction #${id}` : 'Record a new spend item to your ledger'}</p>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)' }}>
+            {isEditMode ? 'Edit Expense Record' : 'Record New Expense'}
+          </h1>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            {isEditMode ? 'Update transaction details and amount' : 'Log an expenditure into your personal ledger'}
+          </p>
         </div>
         <Link to="/expenses" className="btn btn-secondary btn-sm">
-          ← Back to Expenses
+          ← Back to Ledger
         </Link>
       </div>
 
-      <div className="form-card">
+      {error && (
+        <div className="alert-banner alert-danger" style={{ marginBottom: '1.25rem' }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      <div className="transactions-card">
         <form onSubmit={handleSubmit}>
-          {/* Title */}
           <div className="form-group">
-            <label className="form-label" htmlFor="title">Expense Title / Description *</label>
+            <label className="form-label">Expense Title / Description <span style={{ color: 'var(--danger)' }}>*</span></label>
             <input
               type="text"
-              id="title"
-              name="title"
-              className={`form-control ${errors.title ? 'is-invalid' : ''}`}
-              placeholder="e.g. Grocery store purchase, Petrol fill-up..."
-              value={formData.title}
-              onChange={handleChange}
+              className="form-control"
+              placeholder="e.g. Grocery store purchase, Petrol fill-up, Course book..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
             />
-            {errors.title && <span className="error-text">{errors.title}</span>}
           </div>
 
-          {/* Amount & Category */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="amount">Amount (₹) *</label>
+              <label className="form-label">Amount (₹) <span style={{ color: 'var(--danger)' }}>*</span></label>
               <input
                 type="number"
                 step="0.01"
                 min="0.01"
-                id="amount"
-                name="amount"
-                className={`form-control ${errors.amount ? 'is-invalid' : ''}`}
+                className="form-control"
                 placeholder="0.00"
-                value={formData.amount}
-                onChange={handleChange}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
                 required
               />
-              {errors.amount && <span className="error-text">{errors.amount}</span>}
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="categoryId">Category *</label>
+              <label className="form-label">Category <span style={{ color: 'var(--danger)' }}>*</span></label>
               <select
-                id="categoryId"
-                name="categoryId"
-                className={`form-control ${errors.categoryId ? 'is-invalid' : ''}`}
-                value={formData.categoryId}
-                onChange={handleChange}
+                className="form-control"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
                 required
               >
-                <option value="">Select Category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                {DEFAULT_CATEGORIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              {errors.categoryId && <span className="error-text">{errors.categoryId}</span>}
             </div>
           </div>
 
-          {/* Date & Payment Method */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="expenseDate">Expense Date *</label>
+              <label className="form-label">Expense Date <span style={{ color: 'var(--danger)' }}>*</span></label>
               <input
                 type="date"
-                id="expenseDate"
-                name="expenseDate"
-                className={`form-control ${errors.expenseDate ? 'is-invalid' : ''}`}
-                value={formData.expenseDate}
-                onChange={handleChange}
+                className="form-control"
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
                 required
               />
-              {errors.expenseDate && <span className="error-text">{errors.expenseDate}</span>}
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="paymentMethod">Payment Method</label>
+              <label className="form-label">Payment Method</label>
               <select
-                id="paymentMethod"
-                name="paymentMethod"
                 className="form-control"
-                value={formData.paymentMethod}
-                onChange={handleChange}
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
               >
-                <option value="UPI">UPI (Google Pay / PhonePe / Paytm)</option>
+                <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
                 <option value="Credit Card">Credit Card</option>
                 <option value="Debit Card">Debit Card</option>
-                <option value="Cash">Cash</option>
                 <option value="Net Banking">Net Banking</option>
+                <option value="Cash">Cash</option>
               </select>
             </div>
           </div>
 
-          {/* Notes */}
           <div className="form-group">
-            <label className="form-label" htmlFor="notes">Notes / Remarks (Optional)</label>
+            <label className="form-label">Notes / Remarks (Optional)</label>
             <textarea
-              id="notes"
-              name="notes"
-              rows="3"
               className="form-control"
-              placeholder="Additional comments, invoice number, or vendor details..."
-              value={formData.notes}
-              onChange={handleChange}
+              rows={3}
+              placeholder="Vendor notes, invoice numbers, or additional context..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => navigate('/expenses')}
-              disabled={submitting}
-            >
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <Link to="/expenses" className="btn btn-secondary">
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={submitting}
-            >
-              {submitting ? 'Saving...' : isEditMode ? '💾 Save Changes' : '➕ Add Expense'}
+            </Link>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Saving...' : (isEditMode ? 'Update Expense' : 'Save Expense')}
             </button>
           </div>
         </form>
