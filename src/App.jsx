@@ -7,7 +7,6 @@ import DashboardPage from './pages/DashboardPage';
 import ExpensesPage from './pages/ExpensesPage';
 import ExpenseFormPage from './pages/ExpenseFormPage';
 import ReportsPage from './pages/ReportsPage';
-import SpecsPage from './pages/SpecsPage';
 import './styles/App.css';
 
 function ProtectedRoute({ children }) {
@@ -32,16 +31,15 @@ function AppContent() {
           <Route path="/add" element={<ProtectedRoute><ExpenseFormPage /></ProtectedRoute>} />
           <Route path="/edit/:id" element={<ProtectedRoute><ExpenseFormPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-          <Route path="/specs" element={<ProtectedRoute><SpecsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <footer className="footer">
         <p>
-          <strong>SpendWise | Full Stack Java Mini Project</strong> — React + Spring Boot / Servlet-JSP + MySQL
+          <strong>SpendWise | Expense Tracker</strong> — Smart Personal Budget & Expenditure Intelligence
         </p>
-        <p style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-          Course Outcome: <code>CO5 & CO6 Evaluation</code> | Subject Code: <code>CE-JWP-LAB</code> | Scheme: <code>DB25-V1</code>
+        <p style={{ marginTop: '0.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          Secure, Fast & Responsive Web Application • Designed for Students & Professionals
         </p>
       </footer>
     </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar({ onOpenAddExpense }) {
+export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
@@ -56,7 +56,7 @@ export default function Navbar({ onOpenAddExpense }) {
           <div className="brand-info">
             <div className="brand-title">
               Spend<span className="brand-gradient">Wise</span>
-              <span className="brand-badge">PRO v2.0</span>
+              <span className="brand-badge">PRO</span>
             </div>
             <span className="brand-subtitle">Smart Financial Intelligence</span>
           </div>
@@ -75,11 +75,7 @@ export default function Navbar({ onOpenAddExpense }) {
             </Link>
             <Link to="/reports" className={`nav-link-btn ${isActive('/reports')}`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-              Reports & Lab Manual
-            </Link>
-            <Link to="/specs" className={`nav-link-btn ${isActive('/specs')}`}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              Full Stack Specs
+              Reports & Analytics
             </Link>
           </nav>
         )}

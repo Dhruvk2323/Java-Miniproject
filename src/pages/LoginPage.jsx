@@ -65,12 +65,12 @@ export default function LoginPage() {
 
   const handleQuickNewUser = async () => {
     const testId = Math.floor(100 + Math.random() * 900);
-    const newUsername = `student_${testId}`;
+    const newUsername = `user_${testId}`;
     try {
       await register({
-        fullName: 'New Student Demo',
+        fullName: 'New User Demo',
         username: newUsername,
-        email: `${newUsername}@college.edu`,
+        email: `${newUsername}@example.com`,
         password: 'password123'
       });
       navigate('/');
@@ -98,7 +98,7 @@ export default function LoginPage() {
               color: '#c7d2fe',
               border: '1px solid rgba(255,255,255,0.15)'
             }}>
-              🚀 Full Stack Mini Project: React + Spring Boot
+              💎 Smart Financial Intelligence
             </div>
 
             <h1 className="auth-banner-title">
@@ -120,13 +120,13 @@ export default function LoginPage() {
             </div>
             <div className="auth-feature-item">
               <div className="auth-feature-icon">✓</div>
-              <span><strong>Lab Evaluation Ready:</strong> CO5 & CO6 observation matrix and MySQL architecture specs.</span>
+              <span><strong>Export & Reporting:</strong> Download detailed CSV reports and audit your transaction history anytime.</span>
             </div>
           </div>
 
           <div className="auth-banner-footer">
-            <span>Subject Code: <code>CE-JWP-LAB</code></span>
-            <span>Scheme: <code>DB25-V1</code></span>
+            <span>SpendWise Portal</span>
+            <span>Version 2.0 Pro</span>
           </div>
         </div>
 
@@ -204,7 +204,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Quick Demo Logins for Teacher Evaluation */}
+              {/* Quick Demo Logins */}
               <div className="demo-users-divider">
                 <span>Quick Evaluation Demo Accounts</span>
               </div>

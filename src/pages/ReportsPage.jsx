@@ -37,9 +37,9 @@ export default function ReportsPage() {
     <div>
       <div className="dashboard-header">
         <div>
-          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)' }}>Expense Analytics & Lab Report</h1>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)' }}>Expense Reports & Analytics</h1>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Course Outcome Evaluation: CO5 & CO6 Audit Metrics
+            Comprehensive categorical expenditure distribution and channel breakdown
           </p>
         </div>
 
@@ -121,7 +121,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Payment Method Volume */}
-      <div className="transactions-card" style={{ marginBottom: '1.5rem' }}>
+      <div className="transactions-card">
         <div className="card-title-main" style={{ marginBottom: '1rem' }}>
           💳 Spending by Payment Channel
         </div>
@@ -148,63 +148,6 @@ export default function ReportsPage() {
                   <td><strong>{m.pct}%</strong></td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Lab Manual Observation Matrix */}
-      <div className="transactions-card">
-        <div className="card-title-main" style={{ marginBottom: '1rem' }}>
-          🧪 Laboratory Manual - Observation & Test Validation Table
-        </div>
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Module / Feature</th>
-                <th>Test Case Description</th>
-                <th>Expected Outcome</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Backend REST API</strong></td>
-                <td><code>GET /api/expenses</code></td>
-                <td>Returns JSON array of all expenses sorted by date desc</td>
-                <td><span className="badge-pill safe">Verified (200 OK)</span></td>
-              </tr>
-              <tr>
-                <td><strong>Budget Initialization</strong></td>
-                <td><code>POST /api/users/register</code></td>
-                <td>Creates user with initial monthly budget = ₹0.00</td>
-                <td><span className="badge-pill safe">Verified (Budget: ₹0)</span></td>
-              </tr>
-              <tr>
-                <td><strong>Negative Validation</strong></td>
-                <td><code>POST /api/expenses</code> with negative or zero amount</td>
-                <td>HTTP 400 Bad Request with field validation rejection</td>
-                <td><span className="badge-pill safe">Verified (400)</span></td>
-              </tr>
-              <tr>
-                <td><strong>CRUD Operations</strong></td>
-                <td>Create, Read, Update, Delete expense</td>
-                <td>Database record updated, state syncs dynamically</td>
-                <td><span className="badge-pill safe">Verified (CRUD Sync)</span></td>
-              </tr>
-              <tr>
-                <td><strong>User Data Isolation</strong></td>
-                <td>Session logout and switch account</td>
-                <td>Active session clears, user data isolated</td>
-                <td><span className="badge-pill safe">Verified (Multi-Tenant)</span></td>
-              </tr>
-              <tr>
-                <td><strong>CORS Policy</strong></td>
-                <td>Pre-flight OPTIONS on <code>http://localhost:8080</code></td>
-                <td>Allowed headers permitted for SPA front-end</td>
-                <td><span className="badge-pill safe">Verified</span></td>
-              </tr>
             </tbody>
           </table>
         </div>
