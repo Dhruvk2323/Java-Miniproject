@@ -26,9 +26,12 @@ public class User {
     @Column(name = "full_name", length = 100)
     private String fullName;
 
+    @Column(name = "password", length = 100)
+    private String password;
+
     @PositiveOrZero(message = "Monthly budget must be zero or positive")
     @Column(name = "monthly_budget")
-    private Double monthlyBudget = 25000.0;
+    private Double monthlyBudget = 0.0;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -40,7 +43,7 @@ public class User {
         this.username = username;
         this.email = email;
         this.fullName = fullName;
-        this.monthlyBudget = monthlyBudget;
+        this.monthlyBudget = monthlyBudget != null ? monthlyBudget : 0.0;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -74,6 +77,14 @@ public class User {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     public Double getMonthlyBudget() {

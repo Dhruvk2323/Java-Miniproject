@@ -1,22 +1,20 @@
 // ================================================================
-// SPENDWISE API CLIENT — Live Spring Boot Backend
-// Primary: Spring Boot REST API on Render (VITE_API_BASE_URL)
-// Fallback: Client-side LocalStorage (works offline / before backend warms up)
+// SPENDWISE API CLIENT — Live Spring Boot Backend + MySQL
+// Primary: Spring Boot REST API (localhost:8080 / cloud)
+// Fallback: Client-side LocalStorage
 // ================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-// Whether to try the live backend
-const USE_BACKEND = !!API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8080' : '');
 
 // ----------------------------------------------------------------
 // Helper: call backend with timeout, return null on failure
 // ----------------------------------------------------------------
 async function apiCall(method, path, body = null) {
-  if (!USE_BACKEND) return null;
+  if (!API_BASE_URL) return null;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => controller.abort(), 6000);
     const opts = {
       method,
       signal: controller.signal,
@@ -28,8 +26,9 @@ async function apiCall(method, path, body = null) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (res.status === 204) return true;
     return res.json();
-  } catch {
-    return null;          // fall through to localStorage
+  } catch (err) {
+    console.warn(`[SpendWise API] Fallback to LocalStorage for ${method} ${path}:`, err.message);
+    return null;
   }
 }
 
@@ -105,7 +104,7 @@ export function saveStoredExpenses(userId, expenses) {
 }
 
 // ================================================================
-// AUTHENTICATION  (localStorage only — Spring Boot backend is single-user demo)
+// AUTHENTICATION & REGISTRATION
 // ================================================================
 
 export async function loginUser(username, password) {
@@ -118,7 +117,7 @@ export async function loginUser(username, password) {
   if (!user) throw new Error('Invalid username or password.');
   saveCurrentSession(user);
 
-  // Sync budget from live backend if available
+  // Sync profile budget from live backend if available
   const profile = await apiCall('GET', '/api/user/profile');
   if (profile && user.id === 1) {
     user.monthlyBudget = profile.monthlyBudget ?? user.monthlyBudget;
@@ -136,6 +135,22 @@ export async function registerUser({ fullName, username, email, password }) {
 
   // MANDATORY: new user budget = 0
   const newUser = { id: Date.now(), username, fullName, email, password, monthlyBudget: 0 };
+
+  // 1. Save in MySQL via Spring Boot REST API
+  const backendUser = await apiCall('POST', '/api/user/register', {
+    username,
+    email,
+    fullName,
+    password,
+    monthlyBudget: 0.0
+  });
+
+  if (backendUser && backendUser.id) {
+    newUser.id = backendUser.id;
+    console.log('[SpendWise] User successfully registered in MySQL with ID:', backendUser.id);
+  }
+
+  // 2. Save in LocalStorage session
   users.push(newUser);
   saveStoredUsers(users);
   saveCurrentSession(newUser);
@@ -146,14 +161,13 @@ export async function registerUser({ fullName, username, email, password }) {
 export async function logoutUser() { saveCurrentSession(null); }
 
 // ================================================================
-// EXPENSES — tries backend, falls back to localStorage
+// EXPENSES — Syncs with MySQL backend
 // ================================================================
 
-// Normalise a backend expense to match our frontend shape
-function normaliseBackendExpense(e) {
+function normaliseBackendExpense(e, currentUserId) {
   return {
     id:            e.id,
-    userId:        1,
+    userId:        e.user?.id || currentUserId || 1,
     title:         e.title,
     amount:        Number(e.amount),
     categoryId:    e.category?.id ?? e.categoryId ?? 1,
@@ -167,26 +181,23 @@ export async function fetchExpenses(filters = {}) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  // Try live backend for demo_user (id=1)
-  if (USE_BACKEND && user.id === 1) {
-    const params = new URLSearchParams();
-    if (filters.search)     params.set('search',     filters.search);
-    if (filters.categoryId && filters.categoryId !== 'all')
-                            params.set('categoryId', filters.categoryId);
-    const qs = params.toString();
-    const raw = await apiCall('GET', `/api/expenses${qs ? `?${qs}` : ''}`);
-    if (raw && Array.isArray(raw)) {
-      const list = raw.map(normaliseBackendExpense);
-      // Apply client-side sort
-      if (filters.sort === 'amount-desc') list.sort((a,b) => b.amount - a.amount);
-      else if (filters.sort === 'amount-asc') list.sort((a,b) => a.amount - b.amount);
-      else if (filters.sort === 'date-asc')   list.sort((a,b) => new Date(a.expenseDate) - new Date(b.expenseDate));
-      else list.sort((a,b) => new Date(b.expenseDate) - new Date(a.expenseDate));
-      return list;
-    }
+  // Try live MySQL backend
+  const params = new URLSearchParams();
+  if (filters.search)     params.set('search',     filters.search);
+  if (filters.categoryId && filters.categoryId !== 'all')
+                          params.set('categoryId', filters.categoryId);
+  const qs = params.toString();
+  const raw = await apiCall('GET', `/api/expenses${qs ? `?${qs}` : ''}`);
+  if (raw && Array.isArray(raw) && raw.length > 0) {
+    const list = raw.map(e => normaliseBackendExpense(e, user.id));
+    if (filters.sort === 'amount-desc') list.sort((a,b) => b.amount - a.amount);
+    else if (filters.sort === 'amount-asc') list.sort((a,b) => a.amount - b.amount);
+    else if (filters.sort === 'date-asc')   list.sort((a,b) => new Date(a.expenseDate) - new Date(b.expenseDate));
+    else list.sort((a,b) => new Date(b.expenseDate) - new Date(a.expenseDate));
+    return list;
   }
 
-  // localStorage fallback
+  // LocalStorage fallback
   let list = getStoredExpenses(user.id);
   if (filters.search) {
     const q = filters.search.toLowerCase();
@@ -207,10 +218,8 @@ export async function fetchExpenseById(id) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  if (USE_BACKEND && user.id === 1) {
-    const raw = await apiCall('GET', `/api/expenses/${id}`);
-    if (raw) return normaliseBackendExpense(raw);
-  }
+  const raw = await apiCall('GET', `/api/expenses/${id}`);
+  if (raw) return normaliseBackendExpense(raw, user.id);
 
   const list = getStoredExpenses(user.id);
   const found = list.find(e => e.id === Number(id));
@@ -222,20 +231,25 @@ export async function createExpense(data) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  if (USE_BACKEND && user.id === 1) {
-    const payload = {
-      title:         data.title,
-      amount:        Number(data.amount),
-      categoryId:    Number(data.categoryId),
-      expenseDate:   data.expenseDate,
-      paymentMethod: data.paymentMethod || 'UPI',
-      notes:         data.notes || '',
-    };
-    const raw = await apiCall('POST', '/api/expenses', payload);
-    if (raw) return normaliseBackendExpense(raw);
+  // Try saving to MySQL backend
+  const payload = {
+    title:         data.title,
+    amount:        Number(data.amount),
+    categoryId:    Number(data.categoryId),
+    expenseDate:   data.expenseDate,
+    paymentMethod: data.paymentMethod || 'UPI',
+    notes:         data.notes || '',
+  };
+  const raw = await apiCall('POST', '/api/expenses', payload);
+  if (raw) {
+    const saved = normaliseBackendExpense(raw, user.id);
+    const list = getStoredExpenses(user.id);
+    list.unshift(saved);
+    saveStoredExpenses(user.id, list);
+    return saved;
   }
 
-  // localStorage fallback
+  // LocalStorage fallback
   const list = getStoredExpenses(user.id);
   const newExp = {
     id: Date.now(), userId: user.id,
@@ -252,15 +266,13 @@ export async function updateExpense(id, data) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  if (USE_BACKEND && user.id === 1) {
-    const payload = {
-      title: data.title, amount: Number(data.amount),
-      categoryId: Number(data.categoryId), expenseDate: data.expenseDate,
-      paymentMethod: data.paymentMethod, notes: data.notes,
-    };
-    const raw = await apiCall('PUT', `/api/expenses/${id}`, payload);
-    if (raw) return normaliseBackendExpense(raw);
-  }
+  const payload = {
+    title: data.title, amount: Number(data.amount),
+    categoryId: Number(data.categoryId), expenseDate: data.expenseDate,
+    paymentMethod: data.paymentMethod, notes: data.notes,
+  };
+  const raw = await apiCall('PUT', `/api/expenses/${id}`, payload);
+  if (raw) return normaliseBackendExpense(raw, user.id);
 
   const list = getStoredExpenses(user.id);
   const index = list.findIndex(e => e.id === Number(id));
@@ -274,10 +286,8 @@ export async function deleteExpense(id) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  if (USE_BACKEND && user.id === 1) {
-    const ok = await apiCall('DELETE', `/api/expenses/${id}`);
-    if (ok !== null) return true;
-  }
+  const ok = await apiCall('DELETE', `/api/expenses/${id}`);
+  if (ok !== null) return true;
 
   let list = getStoredExpenses(user.id);
   list = list.filter(e => e.id !== Number(id));
@@ -293,22 +303,18 @@ export async function fetchDashboardStats() {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  // Try live backend dashboard
-  if (USE_BACKEND && user.id === 1) {
-    const raw = await apiCall('GET', '/api/dashboard/stats');
-    if (raw) {
-      // Enrich with colors from DEFAULT_CATEGORIES
-      if (raw.categoryBreakdown) {
-        raw.categoryBreakdown = raw.categoryBreakdown.map(c => {
-          const meta = DEFAULT_CATEGORIES.find(dc => dc.name === c.categoryName) || {};
-          return { ...c, color: meta.color || '#64748b', bg: meta.bg || '#f1f5f9', categoryId: c.categoryId };
-        });
-      }
-      return { ...raw, currentUser: user };
+  const raw = await apiCall('GET', '/api/dashboard/stats');
+  if (raw && user.id === 1) {
+    if (raw.categoryBreakdown) {
+      raw.categoryBreakdown = raw.categoryBreakdown.map(c => {
+        const meta = DEFAULT_CATEGORIES.find(dc => dc.name === c.categoryName) || {};
+        return { ...c, color: meta.color || '#64748b', bg: meta.bg || '#f1f5f9', categoryId: c.categoryId };
+      });
     }
+    return { ...raw, currentUser: user };
   }
 
-  // localStorage fallback
+  // LocalStorage calculation
   const expenses = getStoredExpenses(user.id);
   const monthlyBudget = Number(user.monthlyBudget) || 0;
   const currentYearMonth = today.toISOString().slice(0, 7);
@@ -349,9 +355,7 @@ export async function updateMonthlyBudget(newBudget) {
   const user = getCurrentSession();
   if (!user) throw new Error('Not authenticated');
 
-  if (USE_BACKEND && user.id === 1) {
-    await apiCall('PUT', '/api/user/budget', { monthlyBudget: Number(newBudget) });
-  }
+  await apiCall('PUT', '/api/user/budget', { monthlyBudget: Number(newBudget) });
 
   user.monthlyBudget = Number(newBudget);
   saveCurrentSession(user);
@@ -362,14 +366,12 @@ export async function updateMonthlyBudget(newBudget) {
 }
 
 export async function fetchCategories() {
-  if (USE_BACKEND) {
-    const raw = await apiCall('GET', '/api/categories');
-    if (raw && Array.isArray(raw)) {
-      return raw.map(c => {
-        const meta = DEFAULT_CATEGORIES.find(dc => dc.name === c.name) || {};
-        return { id: c.id, name: c.name, color: meta.color || '#64748b', bg: meta.bg || '#f1f5f9' };
-      });
-    }
+  const raw = await apiCall('GET', '/api/categories');
+  if (raw && Array.isArray(raw)) {
+    return raw.map(c => {
+      const meta = DEFAULT_CATEGORIES.find(dc => dc.name === c.name) || {};
+      return { id: c.id, name: c.name, color: meta.color || '#64748b', bg: meta.bg || '#f1f5f9' };
+    });
   }
   return DEFAULT_CATEGORIES;
 }
