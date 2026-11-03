@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: spendwise-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: h2
+      - key: PORT
+        value: 8080
+    healthCheckPath: /api/expenses
