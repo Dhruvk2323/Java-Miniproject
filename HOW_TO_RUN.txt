@@ -1,0 +1,48 @@
+========================================================================
+   SPENDWISE - EXPENSE TRACKER (HOW TO RUN ON ANY COMPUTER)
+========================================================================
+
+PRE-REQUISITES (Make sure these 3 software are installed):
+1. Java JDK 17 or 21 (Check in cmd: java -version)
+2. Node.js LTS (Check in cmd: node -v)
+3. MySQL Server (Running on localhost:3306)
+
+------------------------------------------------------------------------
+STEP 1: SETUP DATABASE (ONE TIME ONLY)
+------------------------------------------------------------------------
+1. Open MySQL Workbench or MySQL Command Line Client.
+2. Open and run the file:
+   "database\setup.sql"
+   
+   (This creates the database 'expensetracker_db', tables, and sample data)
+
+*Note: If your MySQL root password is NOT 'mysql@442':
+Open "backend\src\main\resources\application.properties" and change:
+spring.datasource.password=YOUR_MYSQL_PASSWORD
+
+------------------------------------------------------------------------
+STEP 2: INSTALL FRONTEND PACKAGES (ONE TIME ONLY)
+------------------------------------------------------------------------
+Double-click:
+   INSTALL_DEPENDENCIES.bat
+(Wait until it says "Installation Complete")
+
+------------------------------------------------------------------------
+STEP 3: START BACKEND
+------------------------------------------------------------------------
+Double-click:
+   START_BACKEND.bat
+(Keep this black window open! Backend will run on http://localhost:8080)
+
+------------------------------------------------------------------------
+STEP 4: START FRONTEND
+------------------------------------------------------------------------
+Double-click:
+   START_FRONTEND.bat
+(Keep this window open! Open your browser at http://localhost:5173)
+
+------------------------------------------------------------------------
+CHECK MYSQL DATA:
+------------------------------------------------------------------------
+Double-click "CHECK_MYSQL.bat" anytime to see your live users & expenses tables!
+========================================================================

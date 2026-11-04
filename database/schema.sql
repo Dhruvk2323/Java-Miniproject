@@ -22,6 +22,7 @@ CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(100) DEFAULT 'password123',
     full_name VARCHAR(100),
     monthly_budget DECIMAL(12, 2) DEFAULT 25000.00 CHECK (monthly_budget >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
